@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Список завдань</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 20px; background: #f9f9f9; }
+        input, select, textarea, button {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .task {
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 1px 1px 5px rgba(0,0,0,0.1);
+        }
+        .task-actions { margin-top: 5px; display: flex; gap: 10px; }
+        .task-actions button {
+            width: auto;
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 5px;
+        }
+        .filter label {
+            font-weight: bold;
+        }
+
+        @media (max-width: 600px) {
+            .task-actions { flex-direction: column; }
+        }
+
+        .error {
+            color: red;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Список завдань</h1>
+
+    <div class="filter">
+        <label for="statusFilter">Фільтр за статусом:</label>
+        <select id="statusFilter">
+            <option value="">Усі</option>
+            <option value="нове">Нове</option>
+            <option value="в процесі">В процесі</option>
+            <option value="завершено">Завершено</option>
+        </select>
+    </div>
+
+    <form id="taskForm">
+        <div class="error" id="errorMessage"></div>
+        <input type="hidden" id="taskId">
+        <input type="text" id="title" placeholder="Назва завдання" required>
+        <textarea id="description" placeholder="Опис (необов’язково)"></textarea>
+        <select id="status">
+            <option value="нове">Нове</option>
+            <option value="в процесі">В процесі</option>
+            <option value="завершено">Завершено</option>
+        </select>
+        <button type="submit">Зберегти</button>
+    </form>
+
+    <div id="tasksList"></div>
+
+    <script>
+        const form = document.getElementById('taskForm');
+        const title = document.getElementById('title');
+        const description = document.getElementById('description');
+        const status = document.getElementById('status');
+        const tasksList = document.getElementById('tasksList');
+        const filter = document.getElementById('statusFilter');
+        const taskId = document.getElementById('taskId');
+        const errorMessage = document.getElementById('errorMessage');
+
+        function loadTasks() {
+            let query = filter.value ? '?status=' + encodeURIComponent(filter.value) : '';
+            fetch('/api/tasks' + query)
+                .then(res => res.json())
+                .then(data => {
+                    tasksList.innerHTML = '';
+                    data.forEach(task => {
+                        const div = document.createElement('div');
+                        div.className = 'task';
+                        div.innerHTML = `
+                            <strong>${task.title}</strong> [${task.status}]<br>
+                            <em>${task.description || ''}</em>
+                            <div class="task-actions">
+                                <button onclick="editTask(${task.id}, \`${task.title}\`, \`${task.description}\`, '${task.status}')">✏️ Редагувати</button>
+                                <button onclick="deleteTask(${task.id})">🗑️ Видалити</button>
+                            </div>
+                        `;
+                        tasksList.appendChild(div);
+                    });
+                });
+        }
+
+        form.onsubmit = (e) => {
+            e.preventDefault();
+            errorMessage.textContent = '';
+
+            if (!title.value.trim()) {
+                errorMessage.textContent = 'Назва завдання обов’язкова.';
+                return;
+            }
+
+            const data = {
+                title: title.value.trim(),
+                description: description.value.trim(),
+                status: status.value
+            };
+
+            const method = taskId.value ? 'PUT' : 'POST';
+            const url = taskId.value ? `/api/tasks/${taskId.value}` : '/api/tasks';
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(async res => {
+                if (!res.ok) {
+                    const data = await res.json();
+                    errorMessage.textContent = data.error || 'Помилка збереження.';
+                    return;
+                }
+                form.reset();
+                taskId.value = '';
+                loadTasks();
+            });
+        };
+
+        function deleteTask(id) {
+            fetch(`/api/tasks/${id}`, { method: 'DELETE' })
+                .then(() => loadTasks());
+        }
+
+        function editTask(id, t, d, s) {
+            taskId.value = id;
+            title.value = t;
+            description.value = d;
+            status.value = s;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        filter.onchange = loadTasks;
+        loadTasks();
+    </script>
+</body>
+</html>
